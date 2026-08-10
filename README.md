@@ -130,11 +130,32 @@ organization_**, or every caller fails with "repository not found".
 
 ### `release: published` only fires under a PAT
 
-A release-please workflow running as the default `GITHUB_TOKEN` cannot trigger other
-workflows, so the `release` event never arrives. `linchpin.com` uses `GH_BOT_TOKEN`
-deliberately for this reason.
+A release created by the default `GITHUB_TOKEN` raises no `release` event — GitHub
+suppresses it so a workflow cannot trigger itself. If release-please in your repo runs as
+`secrets.GITHUB_TOKEN`, the workflow above will never fire.
 
-In a repo that does not, hang the job off release-please directly instead:
+**Fix it at the source:** switch release-please to `GH_BOT_TOKEN`, which is what
+`linchpin.com`, `linchpin-blocks` and `mantle` all do.
+
+```yaml
+- uses: googleapis/release-please-action@v5
+  id: release
+  with:
+    token: ${{ secrets.GH_BOT_TOKEN }}   # not GITHUB_TOKEN
+```
+
+Two things change when you do. Release PRs start running CI, because a PR opened by
+`GITHUB_TOKEN` does not trigger workflows and one opened by a PAT does — generally an
+improvement. And **any dormant `release:`-triggered workflow in the repo starts running**,
+possibly for the first time ever. Check for those before flipping the token; mantle had one
+that had never executed once.
+
+<details>
+<summary>Fallback: hang the job off release-please's outputs instead</summary>
+
+If a repo cannot use the PAT, skip the `on: release:` workflow and add a job to
+release-please instead. This works but is a workaround for a misconfiguration, and it has to
+be repeated in every repo.
 
 ```yaml
 jobs:
@@ -164,6 +185,8 @@ jobs:
 
 Most release-please workflows only declare `release_created` in their `outputs` block —
 `tag_name` and `body` have to be added.
+
+</details>
 
 ## Releasing this action
 
