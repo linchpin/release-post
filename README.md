@@ -32,10 +32,10 @@ jobs:
       - uses: linchpin/release-post@v1
         with:
           product: Linchpin Blocks
-          wp-user: ${{ secrets.RELEASE_POST_WP_USER }}
-          wp-app-password: ${{ secrets.RELEASE_POST_WP_APP_PASSWORD }}
-          cf-access-client-id: ${{ secrets.RELEASE_POST_CF_ACCESS_CLIENT_ID }}
-          cf-access-client-secret: ${{ secrets.RELEASE_POST_CF_ACCESS_CLIENT_SECRET }}
+          wp-user: ${{ secrets.WP_USER }}
+          wp-app-password: ${{ secrets.WP_PASS }}
+          cf-access-client-id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          cf-access-client-secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 ```
 
 Everything except `product` and the credentials is read from the release event.
@@ -111,13 +111,18 @@ Four things, once, before the first repo opts in.
 
 1. **A bot user** on the site — role **Author** is enough. It needs `publish_posts`; the
    category and tag are created by the endpoint, which does not capability-check terms.
-2. **An Application Password** for that user. Store it in 1Password, and set the org
-   secrets `RELEASE_POST_WP_USER` and `RELEASE_POST_WP_APP_PASSWORD`.
+2. **An Application Password** for that user. Store it in 1Password, and set `WP_USER` and
+   `WP_PASS`.
 3. **A Cloudflare Access service token**, with a Service Auth policy scoped to
    `builditbelieveit.com/wp-json/linchpin/v1/release-post`. A dedicated token keeps the
-   blast radius on that one path. Store as `RELEASE_POST_CF_ACCESS_CLIENT_ID` and
-   `RELEASE_POST_CF_ACCESS_CLIENT_SECRET`.
+   blast radius on that one path. Store as `CF_ACCESS_CLIENT_ID` and
+   `CF_ACCESS_CLIENT_SECRET`.
 4. **The `Releases` category**, created once so the first run does not have to.
+
+Those four secrets can live on each repo or once at org level — the action does not care,
+it only reads the inputs. Repo-level is the safer default while this is being proven out;
+promoting them to org level later means every product repo opts in with one file and no
+secrets of its own.
 
 The endpoint lives in `linchpin-functionality` on [linchpin.com][repo] and is gated behind
 the `release_posts` module, which is on for the network's main site only.
@@ -177,10 +182,10 @@ jobs:
           tag: ${{ needs.release-please.outputs.tag_name }}
           release-notes: ${{ needs.release-please.outputs.body }}
           release-url: https://github.com/${{ github.repository }}/releases/tag/${{ needs.release-please.outputs.tag_name }}
-          wp-user: ${{ secrets.RELEASE_POST_WP_USER }}
-          wp-app-password: ${{ secrets.RELEASE_POST_WP_APP_PASSWORD }}
-          cf-access-client-id: ${{ secrets.RELEASE_POST_CF_ACCESS_CLIENT_ID }}
-          cf-access-client-secret: ${{ secrets.RELEASE_POST_CF_ACCESS_CLIENT_SECRET }}
+          wp-user: ${{ secrets.WP_USER }}
+          wp-app-password: ${{ secrets.WP_PASS }}
+          cf-access-client-id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          cf-access-client-secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 ```
 
 Most release-please workflows only declare `release_created` in their `outputs` block —
