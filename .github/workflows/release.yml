@@ -1,0 +1,81 @@
+# Release
+#
+# release-please cuts immutable vX.Y.Z releases from main. When one publishes,
+# update-major-tag force-moves the floating major tag (v1 -> v1.2.3) so
+# `uses: linchpin/release-post@v1` always resolves to the newest v1 — the same
+# contract GitHub's own actions offer.
+#
+# ⚠️ A major tag is never created while a branch of the same name exists, or the
+# ref would be ambiguous. If that ever happens: delete the branch, then re-run
+# this workflow via workflow_dispatch with the release tag.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to sync the floating major tag to (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Release Please
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.GH_BOT_TOKEN || github.token }}
+
+  update-major-tag:
+    name: Update floating major tag
+    if: ${{ github.event_name == 'release' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Move major tag to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          MAJOR="${TAG%%.*}"
+          if [ "$MAJOR" = "$TAG" ] || ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::'$TAG' is not a vX.Y.Z release tag"
+            exit 1
+          fi
+
+          # Guard: never create a tag that shadows an existing branch.
+          if gh api "repos/$REPO/branches/$MAJOR" --silent 2>/dev/null; then
+            echo "::warning::Branch '$MAJOR' still exists — skipping the floating tag to avoid an ambiguous ref."
+            exit 0
+          fi
+
+          SHA=$(gh api "repos/$REPO/commits/$TAG" --jq '.sha')
+          echo "Pointing $MAJOR at $TAG ($SHA)"
+          # NOTE: /git/ref/ (singular) is the exact-match endpoint —
+          # /git/refs/ does prefix matching and would match v1.0.0 for v1.
+          if gh api "repos/$REPO/git/ref/tags/$MAJOR" --silent 2>/dev/null; then
+            gh api --method PATCH "repos/$REPO/git/refs/tags/$MAJOR" \
+              --field sha="$SHA" --field force=true
+          else
+            gh api --method POST "repos/$REPO/git/refs" \
+              --field ref="refs/tags/$MAJOR" --field sha="$SHA"
+          fi
+          echo "::notice::$MAJOR now resolves to $TAG"

@@ -1,0 +1,125 @@
+name: "Release blog post"
+description: >-
+  Turn a published GitHub release into a draft blog post on the Linchpin blog.
+
+  Reports the release — repository, tag, notes, URL — to the
+  linchpin/v1/release-post endpoint on the site, which writes the post: an
+  overview through the AI gateway and the changelog rendered from the release
+  notes. Nothing is generated here; this step only rings the bell and reports
+  where the draft landed.
+
+  Safe to re-run. The endpoint keys on repository plus tag, so a re-run updates
+  the draft it wrote earlier and leaves a published post, or a draft somebody
+  has since edited, alone.
+
+  Does not fail the job by default. A release must not be held up because the
+  blog was unreachable — set fail-on-error to flip that.
+
+inputs:
+  site-url:
+    description: "Origin of the site that writes the post, with no trailing slash and no /wp-json"
+    required: false
+    default: "https://builditbelieveit.com"
+  product:
+    description: >-
+      Human-readable product name used in the post title and as the post tag,
+      e.g. "Linchpin Blocks". Defaults to the repository name with separators
+      turned into spaces, which is usually close but rarely how you'd write it.
+    required: false
+    default: ""
+  wp-user:
+    description: "WordPress username the Application Password belongs to"
+    required: true
+  wp-app-password:
+    description: "WordPress Application Password for that user"
+    required: true
+  cf-access-client-id:
+    description: >-
+      Cloudflare Access service token client ID. Required whenever the site sits
+      behind Zero Trust, which builditbelieveit.com does — without it the runner
+      is answered by the Access login page rather than WordPress.
+    required: false
+    default: ""
+  cf-access-client-secret:
+    description: "Cloudflare Access service token client secret"
+    required: false
+    default: ""
+  repository:
+    description: "Full owner/repo the release belongs to"
+    required: false
+    default: ${{ github.repository }}
+  tag:
+    description: "Release tag, e.g. v2.7.0"
+    required: false
+    default: ${{ github.event.release.tag_name }}
+  release-notes:
+    description: "Release notes markdown, as release-please wrote them"
+    required: false
+    default: ${{ github.event.release.body }}
+  release-url:
+    description: "Canonical URL of the GitHub release"
+    required: false
+    default: ${{ github.event.release.html_url }}
+  prerelease:
+    description: >-
+      Whether this is a prerelease. Prereleases are skipped by the endpoint
+      unless force is set.
+    required: false
+    default: ${{ github.event.release.prerelease }}
+  force:
+    description: >-
+      Rewrite the post even when it is published or has been edited by hand
+      (true/false). Off by default; this overwrites human work.
+    required: false
+    default: "false"
+  dry-run:
+    description: "Print the payload and post nothing (true/false)"
+    required: false
+    default: "false"
+  fail-on-error:
+    description: >-
+      Fail the job when the post could not be written (true/false). Off by
+      default so a blog outage cannot fail a release.
+    required: false
+    default: "false"
+
+outputs:
+  post-id:
+    description: "ID of the post that was created, updated or skipped. Empty when nothing was written."
+    value: ${{ steps.post.outputs.post-id }}
+  action:
+    description: "created, updated, skipped, or error"
+    value: ${{ steps.post.outputs.action }}
+  skipped-reason:
+    description: "Why it was skipped: prerelease, unchanged, human_edited or already_published"
+    value: ${{ steps.post.outputs.skipped-reason }}
+  edit-url:
+    description: "wp-admin edit URL for the post"
+    value: ${{ steps.post.outputs.edit-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Post the release
+      id: post
+      shell: bash
+      # Everything reaches the script through the environment. Nothing is
+      # interpolated into the script body: release notes are attacker-adjacent
+      # text (they are built from commit messages, including bot ones) and a
+      # `${{ }}` inside a run block would be a shell injection.
+      env:
+        SITE_URL: ${{ inputs.site-url }}
+        PRODUCT: ${{ inputs.product }}
+        WP_USER: ${{ inputs.wp-user }}
+        WP_APP_PASSWORD: ${{ inputs.wp-app-password }}
+        CF_ACCESS_CLIENT_ID: ${{ inputs.cf-access-client-id }}
+        CF_ACCESS_CLIENT_SECRET: ${{ inputs.cf-access-client-secret }}
+        REPOSITORY: ${{ inputs.repository }}
+        TAG: ${{ inputs.tag }}
+        RELEASE_NOTES: ${{ inputs.release-notes }}
+        RELEASE_URL: ${{ inputs.release-url }}
+        PRERELEASE: ${{ inputs.prerelease }}
+        FORCE: ${{ inputs.force }}
+        DRY_RUN: ${{ inputs.dry-run }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      run: bash "${{ github.action_path }}/release-post.sh"

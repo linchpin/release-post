@@ -1,0 +1,91 @@
+# CI
+#
+# yamllint covers action.yml as well as the workflows. The shared actions repo
+# lints only .github/workflows/, which leaves its composite action.yml files
+# unchecked — worth not inheriting, since action.yml is the whole product here.
+#
+# actionlint and zizmor start non-blocking, matching linchpin/actions. Tighten
+# them once the first release has settled.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: actionlint
+        continue-on-error: true # TODO: make blocking once the first release settles
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color
+
+      - name: yamllint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: action.yml .github/workflows/
+          config_file: .ymllint.yml
+
+      - name: shellcheck
+        run: shellcheck release-post.sh
+
+      - name: zizmor security audit
+        continue-on-error: true # TODO: make blocking once the first release settles
+        run: pipx run zizmor .github/workflows/ action.yml
+
+  smoke:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Proves the action is wired up end to end — inputs resolve, the script
+      # runs, outputs come back — without needing credentials or a live site.
+      - name: Dry run
+        id: dry
+        uses: ./
+        with:
+          site-url: https://example.invalid
+          product: Smoke Test
+          repository: linchpin/release-post
+          tag: v0.0.0-smoke
+          release-notes: |
+            ## [0.0.0](https://example.invalid/compare/v0.0.0...v0.0.0) (2026-01-01)
+
+            ### Features ✨
+
+            * a change that did not happen
+          release-url: https://example.invalid/releases/tag/v0.0.0-smoke
+          wp-user: smoke
+          wp-app-password: smoke
+          dry-run: "true"
+
+      - name: Check outputs
+        env:
+          ACTION: ${{ steps.dry.outputs.action }}
+          REASON: ${{ steps.dry.outputs.skipped-reason }}
+        run: |
+          if [ "$ACTION" != "skipped" ] || [ "$REASON" != "dry_run" ]; then
+            echo "::error::Expected a skipped/dry_run result, got '$ACTION'/'$REASON'"
+            exit 1
+          fi
+          echo "::notice::Dry run reported $ACTION ($REASON)"
