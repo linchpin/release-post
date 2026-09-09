@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/linchpin/release-post/compare/v1.0.0...v1.1.0) (2026-09-09)
+
+
+### Features
+
+* **NO-TASK:** Skip instead of erroring when no credentials are set ([#7](https://github.com/linchpin/release-post/issues/7)) ([9eb4fc3](https://github.com/linchpin/release-post/commit/9eb4fc3296534fd382f10e92cdc916befb6e1094))
+
+
+### Bug Fixes
+
+* **NO-TASK:** Stop pinning every release to 1.0.0 ([#9](https://github.com/linchpin/release-post/issues/9)) ([82ba009](https://github.com/linchpin/release-post/commit/82ba009614e85854c11586fd4e7cf77f59764c4c))
+
 ## [1.0.0](https://github.com/linchpin/release-post/compare/v1.0.0...v1.0.0) (2026-09-09)
 
 
