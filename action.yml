@@ -28,11 +28,17 @@ inputs:
     required: false
     default: ""
   wp-user:
-    description: "WordPress username the Application Password belongs to"
-    required: true
+    description: >-
+      WordPress username the Application Password belongs to. Leave this and
+      wp-app-password both unset to skip announcing the product: the action then
+      warns and exits without writing, rather than erroring on every release of
+      a product nobody has set up yet. Setting one without the other fails.
+    required: false
+    default: ""
   wp-app-password:
-    description: "WordPress Application Password for that user"
-    required: true
+    description: "WordPress Application Password for that user. Paired with wp-user"
+    required: false
+    default: ""
   cf-access-client-id:
     description: >-
       Cloudflare Access service token client ID. Required whenever the site sits
