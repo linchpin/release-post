@@ -30,6 +30,40 @@ fail() {
   exit 0
 }
 
+# Not configured is a different state from configured and broken, and it is
+# checked before anything else: a product nobody has set up yet should not be
+# told its release notes are missing either.
+#
+# A repository that has never been given credentials would otherwise get an
+# ::error:: annotation stapled to every release it cuts, and an error nobody can
+# act on until two secrets exist is one people learn to scroll past. So skip,
+# loudly enough to be findable and quietly enough to be ignorable.
+#
+# Both empty means not set up. Exactly one empty is a genuine mistake and still
+# fails below.
+if [ -z "${WP_USER:-}" ] && [ -z "${WP_APP_PASSWORD:-}" ]; then
+  echo "::warning::wp-user and wp-app-password are not set, so this release was not announced. Add them to enable the release post."
+
+  {
+    echo "action=skipped"
+    echo "post-id="
+    echo "skipped-reason=not_configured"
+    echo "edit-url="
+  } >>"${GITHUB_OUTPUT}"
+
+  # Worth a summary line rather than only a log annotation: this is the state
+  # somebody is most likely to be wondering about, and it persists across every
+  # release until the secrets land.
+  {
+    echo "### Release blog post"
+    echo
+    echo "- **Outcome:** \`skipped\` (\`not_configured\`)"
+    echo "- Set \`wp-user\` and \`wp-app-password\` to announce this product."
+  } >>"${GITHUB_STEP_SUMMARY}"
+
+  exit 0
+fi
+
 for required in SITE_URL REPOSITORY TAG; do
   if [ -z "${!required:-}" ]; then
     fail "${required} is empty. When this action runs outside a 'release' event, pass repository, tag, release-notes and release-url explicitly."
@@ -40,8 +74,10 @@ if [ -z "${RELEASE_NOTES:-}" ]; then
   fail "release-notes is empty. On a release event this comes from the release body; release-please writes one, so an empty value usually means the workflow is triggered by something else."
 fi
 
+# Reached only when exactly one of the pair is set, the both-empty case having
+# skipped above. That is a typo or a missing secret, not an unconfigured repo.
 if [ -z "${WP_USER:-}" ] || [ -z "${WP_APP_PASSWORD:-}" ]; then
-  fail "wp-user and wp-app-password are both required."
+  fail "wp-user and wp-app-password go together; one is set and the other is empty. Leave both unset to skip announcing this product."
 fi
 
 # Mask before the value can reach a log line. base64 of user:password is the

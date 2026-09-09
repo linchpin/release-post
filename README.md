@@ -91,10 +91,23 @@ alone — forcing a published post rewrites it in place, it does not unpublish i
 
 ## Outputs
 
-`post-id`, `action` (`created` / `updated` / `skipped` / `error`), `skipped-reason`,
-`edit-url`.
+`post-id`, `action` (`created` / `updated` / `skipped` / `error`), `skipped-reason`
+(`not_configured` / `dry_run` / `prerelease` / `unchanged` / `human_edited` /
+`already_published`), `edit-url`.
 
 The step also writes the outcome and a link to the draft into the job summary.
+
+## A product nobody has set up stays quiet
+
+Leave `wp-user` and `wp-app-password` both unset and the action warns, reports
+`skipped` / `not_configured`, and exits without writing. That is deliberate: a repository
+that has never been given credentials would otherwise carry an `::error::` annotation on
+every release it cuts, and an error nobody can act on until two secrets exist is one people
+learn to scroll past.
+
+So a repo can adopt this workflow before anyone has decided whether that product gets
+announced, and adding the secrets is the switch. Setting one of the pair without the other
+is a mistake rather than a state, and still fails.
 
 ## Failures are not fatal by default
 
