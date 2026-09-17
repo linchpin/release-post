@@ -1,12 +1,11 @@
 name: "Release blog post"
 description: >-
-  Turn a published GitHub release into a draft blog post on the Linchpin blog.
+  Turn a published GitHub release into a draft blog post on a WordPress site.
 
-  Reports the release — repository, tag, notes, URL — to the
-  linchpin/v1/release-post endpoint on the site, which writes the post: an
-  overview through the AI gateway and the changelog rendered from the release
-  notes. Nothing is generated here; this step only rings the bell and reports
-  where the draft landed.
+  Reports the release — repository, tag, notes, URL — to a REST endpoint on
+  the site, which writes the post: an overview generated from the release
+  notes and the changelog rendered from them. Nothing is generated here; this
+  step only rings the bell and reports where the draft landed.
 
   Safe to re-run. The endpoint keys on repository plus tag, so a re-run updates
   the draft it wrote earlier and leaves a published post, or a draft somebody
@@ -15,15 +14,27 @@ description: >-
   Does not fail the job by default. A release must not be held up because the
   blog was unreachable — set fail-on-error to flip that.
 
+  Site-agnostic: point site-url at any WordPress site that implements the
+  documented endpoint contract. Nothing here is tied to one blog.
+
 inputs:
   site-url:
-    description: "Origin of the site that writes the post, with no trailing slash and no /wp-json"
+    description: >-
+      Origin of the WordPress site that writes the post, e.g.
+      https://blog.example.com — no trailing slash and no /wp-json. There is
+      no default: every caller names its site.
+    required: true
+  endpoint:
+    description: >-
+      Path of the REST route that receives the release, relative to site-url.
+      Defaults to the reference route from the endpoint contract in the README.
+      Set it when your site registers the contract under a different namespace.
     required: false
-    default: "https://builditbelieveit.com"
+    default: "/wp-json/release-post/v1/post"
   product:
     description: >-
       Human-readable product name used in the post title and as the post tag,
-      e.g. "Linchpin Blocks". Defaults to the repository name with separators
+      e.g. "Acme Blocks". Defaults to the repository name with separators
       turned into spaces, which is usually close but rarely how you'd write it.
     required: false
     default: ""
@@ -42,8 +53,9 @@ inputs:
   cf-access-client-id:
     description: >-
       Cloudflare Access service token client ID. Required whenever the site sits
-      behind Zero Trust, which builditbelieveit.com does — without it the runner
-      is answered by the Access login page rather than WordPress.
+      behind Cloudflare Zero Trust — without it the runner is answered by the
+      Access login page rather than WordPress. Leave unset for a site that is
+      not behind Access.
     required: false
     default: ""
   cf-access-client-secret:
@@ -97,7 +109,7 @@ outputs:
     description: "created, updated, skipped, or error"
     value: ${{ steps.post.outputs.action }}
   skipped-reason:
-    description: "Why it was skipped: prerelease, unchanged, human_edited or already_published"
+    description: "Why it was skipped: not_configured, dry_run, prerelease, unchanged, human_edited or already_published"
     value: ${{ steps.post.outputs.skipped-reason }}
   edit-url:
     description: "wp-admin edit URL for the post"
@@ -115,6 +127,7 @@ runs:
       # `${{ }}` inside a run block would be a shell injection.
       env:
         SITE_URL: ${{ inputs.site-url }}
+        ENDPOINT_PATH: ${{ inputs.endpoint }}
         PRODUCT: ${{ inputs.product }}
         WP_USER: ${{ inputs.wp-user }}
         WP_APP_PASSWORD: ${{ inputs.wp-app-password }}
