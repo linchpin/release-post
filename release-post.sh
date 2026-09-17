@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Report a published GitHub release to the Linchpin blog, which writes the post.
+# Report a published GitHub release to a WordPress site, which writes the post.
 #
 # Every value arrives through the environment — see action.yml for why. The
 # response is read as text before anything tries to parse it as JSON: this
@@ -10,7 +10,12 @@
 
 set -euo pipefail
 
-ENDPOINT="${SITE_URL%/}/wp-json/linchpin/v1/release-post"
+# site-url is the origin; endpoint is the route path beneath it. The endpoint
+# falls back to the reference route from the README contract. Trailing and
+# leading slashes are normalised so "https://x.com/" + "wp-json/..." and
+# "https://x.com" + "/wp-json/..." land on the same URL.
+ENDPOINT_PATH="${ENDPOINT_PATH:-/wp-json/release-post/v1/post}"
+ENDPOINT="${SITE_URL%/}/${ENDPOINT_PATH#/}"
 
 fail() {
   echo "::error::$1"
@@ -64,9 +69,9 @@ if [ -z "${WP_USER:-}" ] && [ -z "${WP_APP_PASSWORD:-}" ]; then
   exit 0
 fi
 
-for required in SITE_URL REPOSITORY TAG; do
+for required in SITE_URL ENDPOINT_PATH REPOSITORY TAG; do
   if [ -z "${!required:-}" ]; then
-    fail "${required} is empty. When this action runs outside a 'release' event, pass repository, tag, release-notes and release-url explicitly."
+    fail "${required} is empty. site-url has no default and must always be set; repository, tag, release-notes and release-url must be passed explicitly when this action runs outside a 'release' event."
   fi
 done
 
@@ -182,7 +187,7 @@ if ! echo "${RESPONSE}" | jq -e . >/dev/null 2>&1; then
   echo "${RESPONSE}" | head -c 300
   echo
   echo "::endgroup::"
-  fail "Endpoint did not return JSON (HTTP ${STATUS}). An HTML body here is usually Cloudflare Access — check the service token and that the Access policy covers /wp-json/linchpin/v1/release-post."
+  fail "Endpoint did not return JSON (HTTP ${STATUS}). An HTML body here is usually Cloudflare Access or a WAF challenge — check the service token and that the Access policy covers ${ENDPOINT}."
 fi
 
 if [ "${STATUS}" != "200" ]; then
@@ -193,7 +198,10 @@ POST_ID="$(echo "${RESPONSE}" | jq -r '.post_id // empty')"
 ACTION="$(echo "${RESPONSE}" | jq -r '.action // "unknown"')"
 REASON="$(echo "${RESPONSE}" | jq -r '.skipped_reason // empty')"
 EDIT_URL="$(echo "${RESPONSE}" | jq -r '.edit_url // empty')"
-GENERATED="$(echo "${RESPONSE}" | jq -r '.generated // false')"
+# `generated` is optional in the contract. An endpoint that only renders the
+# changelog omits it, and that is not a problem to warn about; only an explicit
+# false means the site tried to write an overview and could not.
+GENERATED="$(echo "${RESPONSE}" | jq -r 'if has("generated") then (.generated | tostring) else "n/a" end')"
 
 {
   echo "action=${ACTION}"
@@ -233,8 +241,8 @@ case "${ACTION}" in
     ;;
 esac
 
-if [ "${ACTION}" != "skipped" ] && [ "${GENERATED}" != "true" ]; then
-  echo "::warning::The overview was not generated — the post has placeholder copy above a complete changelog. Check the AI gateway credentials on ${SITE_URL}."
+if [ "${ACTION}" != "skipped" ] && [ "${GENERATED}" = "false" ]; then
+  echo "::warning::The overview was not generated — the post has placeholder copy above a complete changelog. Check the text-generation credentials on ${SITE_URL}."
 fi
 
 {
@@ -244,5 +252,7 @@ fi
   if [ -n "${EDIT_URL}" ]; then
     echo "- **Draft:** ${EDIT_URL}"
   fi
-  echo "- **Overview generated:** ${GENERATED}"
+  if [ "${GENERATED}" != "n/a" ]; then
+    echo "- **Overview generated:** ${GENERATED}"
+  fi
 } >>"${GITHUB_STEP_SUMMARY}"
