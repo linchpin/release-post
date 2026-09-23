@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/linchpin/release-post/compare/v1.1.0...v1.2.0) (2026-09-17)
+
+
+### Features
+
+* **NO-TASK:** Make the site and endpoint inputs generic ahead of open-sourcing ([#11](https://github.com/linchpin/release-post/issues/11)) ([a3e2de4](https://github.com/linchpin/release-post/commit/a3e2de4ceabcc68adc08cc5b85cde396d1452511))
+
 ## [1.1.0](https://github.com/linchpin/release-post/compare/v1.0.0...v1.1.0) (2026-09-09)
 
 

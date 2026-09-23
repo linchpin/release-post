@@ -18,7 +18,7 @@ the receiving side. Linchpin's own values are in [Linchpin setup](#linchpin-setu
 Please see [CHANGELOG.md](CHANGELOG.md) for release history.
 
 <!-- x-release-please-start-version -->
-## Latest Release: 1.1.0
+## Latest Release: 1.2.0
 <!-- x-release-please-end -->
 
 | Workflow | Status |
